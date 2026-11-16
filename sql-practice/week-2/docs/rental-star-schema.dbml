@@ -1,0 +1,149 @@
+Project rental_star_schema {
+  database_type: 'PostgreSQL'
+  Note: '''
+    Grain: one row in fact_rental represents one rental of one inventory copy of a film by one customer.
+    Row count to match in Week 3: 51,805 rentals.
+    Open rentals: 241 have no return date. days_kept is empty for them, and return_date_key points to the Not returned yet row in dim_date.
+    Payments are not in this fact table. 749 rentals have no payment, and rental 4591 has six, five of them under other customers. Payments get their own fact table, one row per payment.
+    Categories: a film can have several, so category totals add up to more than total rentals.
+    Data quality rule: the customer on a payment must match the customer on its rental. Rental 4591 breaks it.
+    Source row counts: 999 customers, 1,000 films, 500 stores, 1,500 staff, 16 categories, 2,367 film-category pairs.
+  '''
+}
+
+Table fact_rental {
+  rental_id int [pk]
+  inventory_id int
+  customer_key int
+  store_key int
+  film_key int
+  staff_key int
+  return_date_key int
+  rental_date_key int
+  rental_count int
+  days_kept int
+  Note: '''
+    Grain: one rental of one inventory copy of a film by one customer. Must have 51,805 rows.
+    days_kept is the return date minus the rental date in whole days. It is additive, and empty for the 241 open rentals.
+    rental_count is always 1.
+    store_key is the store that owns the copy, found through inventory.
+    Payment amounts are not stored here.
+  '''
+}
+
+Table dim_date {
+  date_key int [pk]
+  full_date date
+  day_of_week_number int
+  day_name text
+  day_of_month int
+  month_number int
+  month_name text
+  calendar_year int
+  quarter int
+  is_weekend boolean
+  Note: '''
+    date_key is a readable integer such as 20220524. One row per day, including days with no rentals.
+    Special row with key -1, labelled Not returned yet, for the 241 open rentals.
+    Used twice by fact_rental: for the rental date and the return date.
+  '''
+}
+
+Table bridge_film_category {
+  film_key int
+  category_key int
+  indexes {
+    (film_key, category_key) [pk]
+  }
+  Note: 'Many-to-many link between films and categories. 2,367 rows. Built in Week 3.'
+}
+
+Table dim_category {
+  category_key int [pk]
+  category_id int
+  category_name text
+  Note: '16 rows.'
+}
+
+Table dim_staff {
+  staff_key int [pk]
+  staff_id int
+  first_name text
+  last_name text
+  email text
+  is_active boolean
+  Note: '''
+    1,500 rows. Rentals only use staff 1 and 2.
+    Password, picture and username are left out on purpose.
+    Email and active status can change. SCD type to be decided on Tuesday.
+  '''
+}
+
+Table dim_store {
+  store_key int [pk]
+  store_id int
+  store_name text [note: 'store_id and city']
+  manager_name text [note: 'staff_first_name and staff_last_name']
+  address text
+  district text
+  city text
+  postal_code text
+  country text
+  phone text
+  Note: '''
+    500 rows, built from store. Rentals only use stores 1 and 2.
+    store_name is store_id plus city, because 126 cities are shared by more than one store.
+    The manager comes from store.manager_staff_id. A blank phone is shown as Not specified.
+    Manager and phone can change. SCD type to be decided on Tuesday.
+  '''
+}
+
+Table dim_film {
+  film_key int [pk]
+  film_id int
+  title text
+  description text
+  release_year int
+  language text
+  original_language text
+  length int
+  rating text
+  rental_duration int
+  rental_rate numeric(5,2)
+  replacement_cost numeric(5,2)
+  Note: '''
+    1,000 rows. Category lives in the bridge table, and actors are left out because a film has many.
+    Empty original_language is shown as Not specified.
+    Rental rate and replacement cost can change. SCD type to be decided on Tuesday.
+  '''
+}
+
+Table dim_customer {
+  customer_key int [pk]
+  customer_id int
+  email text
+  first_name text
+  last_name text
+  phone text
+  country text
+  city text
+  district text
+  address text
+  postal_code text
+  customer_since date
+  is_active boolean
+  Note: '''
+    999 rows, built from customer outward. 2 customers have never rented, and they still belong here.
+    The uuid column in the source is left out on purpose.
+    Address, phone, email and active status can change. SCD type to be decided on Tuesday.
+  '''
+}
+
+Ref: fact_rental.customer_key > dim_customer.customer_key
+Ref: fact_rental.film_key > dim_film.film_key
+Ref: fact_rental.store_key > dim_store.store_key
+Ref: fact_rental.staff_key > dim_staff.staff_key
+Ref: fact_rental.rental_date_key > dim_date.date_key
+Ref: fact_rental.return_date_key > dim_date.date_key
+Ref: bridge_film_category.film_key > dim_film.film_key
+Ref: bridge_film_category.category_key > dim_category.category_key
