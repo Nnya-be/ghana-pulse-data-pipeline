@@ -1,5 +1,132 @@
-# Ingest
+# Ingest: source tests (week 2, day 3)
 
-Scripts that pull raw data from source systems and load it into the database.
+Tested on 18 November 2026, with Python 3.14.4 on Linux and `requests` 2.34.2.
 
-_Coming soon._
+Every statement below comes from a request I ran, from a provider's own record or documentation, or is a decision about the pipeline. Anything not yet checked is listed at the end.
+
+The saved raw samples are in `ingest/samples/`. They are the first files of the bronze layer.
+
+## How to run
+
+```
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install requests
+python ingest/week-2/day-3-test-weather/fetch_weather_sample.py
+```
+
+Run the scripts from the repository root. `.venv/` is in `.gitignore`.
+
+## Weather: Open-Meteo
+
+Endpoint that worked: `https://archive-api.open-meteo.com/v1/archive`.
+
+A request to `https://api.open-meteo.com/v1/archive` returned `404 Not Found`. The archive endpoint is on the `archive-api` host.
+
+### Requests
+
+| Sample | Parameters |
+|---|---|
+| Hourly | `latitude=6.6885`, `longitude=-1.6244`, `start_date=2026-11-01`, `end_date=2026-11-01`, `hourly=temperature_2m,weathercode`, `timezone=Africa/Accra` |
+| Daily | the same location, dates and time zone, with `daily=temperature_2m_max,temperature_2m_min,precipitation_sum,weathercode` |
+
+### Observations (Kumasi, 2026-11-01)
+
+- **The returned coordinates differ from the requested ones.** I requested 6.6885, -1.6244 and the response says 6.7135324, -1.5895691, which is roughly 5 km away. The response also gives elevation 275.0. I have not looked up why they differ.
+- **The JSON is column-shaped.** Under `hourly` and `daily`, each variable is a list, and `time` is a list too. The hourly response has 24 entries in `time`, and 24 values per variable.
+- **The response does not name the city.** The only location information is the returned latitude and longitude.
+- **`generationtime_ms` changed on every call:** 0.1833, 0.1824 and 0.1402 across three responses. Two downloads of the same day are therefore not byte-for-byte identical.
+- **Time zone:** the response reports `Africa/Accra`, abbreviation `GMT`, `utc_offset_seconds` 0.
+- **Units in the response:** `°C` for temperatures, `mm` for `precipitation_sum`, and `wmo code` for `weathercode`.
+- **Daily values for 2026-11-01:** maximum 31.3, minimum 22.9, precipitation 1.5 mm, weather code 53.
+- **Hourly against daily:** the highest hourly temperature is 31.2 (14:00) and the lowest is 22.9 (05:00). The daily minimum matches the hourly minimum, and the daily maximum is 0.1 higher than the highest hourly value. I have not checked why.
+- **Weather code:** the daily code (53) equals the highest of the 24 hourly codes in this sample. The hourly codes include 0, 1, 2, 3, 51 and 53.
+
+### Consequences for the pipeline
+
+- Each raw weather file must be stored together with the city name, the coordinates I requested, and the fetch time, because the response does not hold them.
+- `dim_city` holds my own coordinates for each city.
+- A check that a rerun created no duplicates must compare the data (city and date), not whole files, because `generationtime_ms` differs between calls.
+
+## Exchange rates: Frankfurter
+
+Endpoint: `https://api.frankfurter.dev/v2/rates`, with the parameters `from`, `to`, `base`, `quotes` and `providers`. No API key was needed for any request.
+
+### Tests on the blended series (no `providers` parameter)
+
+| Request | Result |
+|---|---|
+| `from=2026-11-01&to=2026-11-10&base=usd&quotes=ghs` | 9 records. 2026-11-07 is missing. The records for 2026-11-01 and 2026-11-08 exist |
+| `date=2024-11-13&base=usd&quotes=ghs` | One record dated 2024-11-13, rate 16.1992 |
+| `date=2026-11-07&base=usd&quotes=ghs` | One record dated **2026-11-06**, rate 11.6913 |
+
+### Providers behind the blended rate (`expand=providers`, 2026-11-01 to 2026-11-10)
+
+Each blended record lists six providers: BDI, BOG, CBG, CBKKW, CBSL and NBP. Only BOG is identified here, as the Bank of Ghana, by its provider record below.
+
+- **On 2026-11-01 and 2026-11-08, only CBKKW has a quote dated that day.** The other five providers carry earlier dates. On 2026-11-08 they carry 2026-11-06, except NBP, which carries 2026-11-04.
+- **NBP's quote is dated 2026-10-28 on the records for 2026-11-01, 2026-11-02 and 2026-11-03.**
+- **The providers' rates differ on the same day.** On 2026-11-10 the six values ran from 11.6649 to 11.9112 (CBG). The blended rate for that day was 11.7217.
+
+### The Bank of Ghana as the only provider (`providers=bog`)
+
+The provider record returned by Frankfurter states:
+
+| Field | Value |
+|---|---|
+| Name | Bank of Ghana |
+| Rate type | interbank middle rate |
+| Cadence | daily |
+| Start date | 1996-01-02 |
+| End date (when queried) | 2026-11-17 |
+| Currencies listed | include USD, EUR, GBP, GHS and GHC |
+
+| Request | Result |
+|---|---|
+| `from=2026-11-01&to=2026-11-10&base=usd&quotes=ghs&providers=bog` | 8 records, from **2026-10-30** to 2026-11-10. No records for 2026-11-01, 2026-11-07 or 2026-11-08 |
+| `from=2026-11-02&to=2026-11-10&...&providers=bog` | 7 records, from 2026-11-02 to 2026-11-10. No earlier record |
+| `from=2026-11-02&to=2026-11-17&...&providers=bog` (saved by the script) | 12 records, from 2026-11-02 to 2026-11-17. No records for 7, 8, 14 and 15 November |
+| `date=2024-11-13&base=usd&quotes=ghs&providers=bog` | One record dated 2024-11-13, rate 16.15 |
+
+### Observations
+
+- **The Bank of Ghana records have two decimals.** The blended records have four.
+- **Three requests gave the same rates for 2026-11-02 to 2026-11-10.** Values in that period: 11.66, 11.66, 11.66, 11.66, 11.64, 11.69 and 11.70.
+- **Bank of Ghana against the blend:** 11.70 against 11.7217 on 2026-11-10, and 16.15 against 16.1992 on 2024-11-13.
+- **A range starting on Sunday 2026-11-01 returned a record dated 2026-10-30.** Ranges starting on Monday 2026-11-02 returned no earlier record. I have not established why.
+- **When I fetched on 18 November, the latest record was dated 17 November.**
+- **Weekends:** in every Bank of Ghana range I ran, the missing dates were weekend days.
+
+### Decision
+
+The source is Frankfurter with `providers=bog`, the Bank of Ghana interbank middle rate.
+
+Reasons, each from the tests above:
+- it returns the cedi
+- it returned daily records on business days
+- it returned a rate for a date two years back
+- its provider record states a start date of 1996-01-02
+- a date-range request works
+- it is a single named provider, so every rate has one known origin
+
+The blended series is kept as a cross-check, not as the source.
+
+### Rules for the pipeline
+
+1. **Use the `date` field of each record, never the date I requested.** A single-date request for a Saturday returned a record dated Friday.
+2. **Ingest with a range request.** A range returned only dates that have a rate.
+3. **Load as an upsert keyed on `date`, `base` and `quote`.** A range can return a record from before its start date, so the same record can arrive twice.
+4. **Bronze and silver keep exactly what arrived,** with no invented rows.
+5. **Gold fills dates that have no rate** by carrying the last known rate forward, with an `is_carried_forward` flag, so that every date in `dim_date` has a rate and carried values are marked.
+6. **Parse rates as `Decimal`, never as floats.** Frankfurter's Python documentation also recommends this for money.
+7. **Save the raw response bytes,** not parsed JSON written back out.
+8. **The loader must accept a day with no rate yet.** The latest record was one day behind when I fetched.
+
+## Not yet checked
+
+- A full two-year range request: its record count and every gap longer than a weekend.
+- The other currency pairs in the plan, with `providers=bog`.
+- The terms of Open-Meteo, Frankfurter and the Bank of Ghana.
+- Hourly or daily weather for the 16 cities.
+- A comparison of the hourly rainfall total with the daily `precipitation_sum` for 2026-11-01.
+- A lookup table for weather code meanings.
