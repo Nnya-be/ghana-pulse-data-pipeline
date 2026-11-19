@@ -6,13 +6,23 @@ Every statement below comes from a request I ran, from a provider's own record o
 
 The saved raw samples are in `ingest/samples/`. They are the first files of the bronze layer.
 
+## Files
+
+| File | What it is |
+|---|---|
+| `week-2/day-3/fetch_weather_sample.py` | Fetches hourly and daily Open-Meteo weather for Kumasi on 2026-11-01 and saves the raw response bytes |
+| `week-2/day-3/fetch_fx_rates_sample.py` | Fetches Bank of Ghana USD/GHS rates from Frankfurter for 2026-11-02 to 2026-11-17 and saves the raw response bytes |
+| `samples/open_meteo_kumasi_2026-11-01_hourly.json` | Raw Open-Meteo hourly response, written by `fetch_weather_sample.py` |
+| `samples/open_meteo_kumasi_2026-11-01_daily.json` | Raw Open-Meteo daily response, written by `fetch_weather_sample.py` |
+| `samples/frankfurter_bog_usd_ghs_2026-11-02_to_2026-11-17.json` | Raw Frankfurter response (`providers=bog`), written by `fetch_fx_rates_sample.py` |
+
 ## How to run
 
 ```
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install requests
-python ingest/week-2/day-3-test-weather/fetch_weather_sample.py
+python ingest/week-2/day-3/fetch_weather_sample.py
 ```
 
 Run the scripts from the repository root. `.venv/` is in `.gitignore`.
