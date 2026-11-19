@@ -21,8 +21,9 @@ The saved raw samples are in `ingest/samples/`. They are the first files of the 
 ```
 python3 -m venv .venv
 source .venv/bin/activate
-python -m pip install requests
+python -m pip install -r requirements.txt
 python ingest/week-2/day-3/fetch_weather_sample.py
+python ingest/week-2/day-3/fetch_fx_rates_sample.py
 ```
 
 Run the scripts from the repository root. `.venv/` is in `.gitignore`.
@@ -137,7 +138,6 @@ The blended series is kept as a cross-check, not as the source.
 - A full two-year range request: its record count and every gap longer than a weekend.
 - The other currency pairs in the plan, with `providers=bog`.
 - The terms of Open-Meteo, Frankfurter and the Bank of Ghana.
-- Hourly or daily weather for the 16 cities.
 - A comparison of the hourly rainfall total with the daily `precipitation_sum` for 2026-11-01.
 - A lookup table for weather code meanings.
 
@@ -147,6 +147,9 @@ The blended series is kept as a cross-check, not as the source.
 October 2024 to October 2026 inclusive: 25 whole months. Every month in the range is closed, so a run has complete data to load. The current month is excluded and will be handled by the daily job (week 5).
 
 Expected counts: 16 cities x 25 months = 400 weather files. FX: 25 files per currency pair.
+
+### Weather granularity
+Each weather file holds **daily values only**, one request per city per month with `daily=temperature_2m_max,temperature_2m_min,precipitation_sum,weathercode` and `timezone=Africa/Accra`. A file has one row per day of the month (28 to 31). Daily matches the one-row-per-day grain of `dim_date` and of the FX rates, so weather and rates join on date without aggregating. Hourly values are not ingested. The hourly sample in `ingest/samples/` stays as a test record only.
 
 ### Partitions
 One file per city per month for weather. One file per pair per month for FX. A bad month can be refetched on its own, and one failure affects one file.

@@ -5,7 +5,6 @@ import requests as req
 
 URL = 'https://archive-api.open-meteo.com/v1/archive'
 CITY = 'Kumasi'
-COUNTRY = 'Ghana'
 LONGITUDE = -1.6244
 LATITUDE = 6.6885
 OUTPUT_DIR = Path("ingest/samples")
