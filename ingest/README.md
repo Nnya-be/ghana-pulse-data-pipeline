@@ -140,3 +140,34 @@ The blended series is kept as a cross-check, not as the source.
 - Hourly or daily weather for the 16 cities.
 - A comparison of the hourly rainfall total with the daily `precipitation_sum` for 2026-11-01.
 - A lookup table for weather code meanings.
+
+## Ingestion design
+
+### Period
+October 2024 to October 2026 inclusive: 25 whole months. Every month in the range is closed, so a run has complete data to load. The current month is excluded and will be handled by the daily job (week 5).
+
+Expected counts: 16 cities x 25 months = 400 weather files. FX: 25 files per currency pair.
+
+### Partitions
+One file per city per month for weather. One file per pair per month for FX. A bad month can be refetched on its own, and one failure affects one file.
+
+### Paths
+```
+data/raw/weather/city=<slug>/month=<YYYY-MM>/response.json
+data/raw/weather/city=<slug>/month=<YYYY-MM>/meta.json
+data/raw/fx/provider=<key>/pair=<base>-<quote>/month=<YYYY-MM>/response.json
+data/raw/fx/provider=<key>/pair=<base>-<quote>/month=<YYYY-MM>/meta.json
+```
+The same city and month always map to the same path, so a rerun replaces a file and never adds a second one. City slugs come from `ingest/config/cities.csv` and never change.
+
+### Skip or overwrite
+A month is skipped only if `response.json` and `meta.json` both exist, the response size equals the size recorded in `meta.json`, the recorded status is 200, and the recorded request parameters equal this run's. Otherwise the month is fetched and overwritten. `--force` fetches every month.
+
+### Write order
+Each file is written under a temporary name and then renamed. `response.json` is written first and `meta.json` last, so a missing `meta.json` means the month is not finished.
+
+### meta.json
+City or pair and provider, request parameters, requested coordinates (weather), start and end dates, exact URL, fetch time, HTTP status, size in bytes, and a SHA-256 hash of the response.
+
+### Not tracked in git
+`data/` is in `.gitignore`. It can be rebuilt by running the loader. Only code, config and the small files in `ingest/samples/` are committed.
