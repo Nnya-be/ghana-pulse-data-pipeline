@@ -1,0 +1,17 @@
+city_slug,city,region,latitude,longitude,coordinate_source
+accra,Accra,Greater Accra,5.5600,-0.2057,OSM wiki; checked: geodatos.net
+kumasi,Kumasi,Ashanti,6.6885,-1.6244,geodatos.net (GeoNames); checked: NGA; OSM via mapcarta
+sekondi-takoradi,Sekondi-Takoradi,Western,4.9340,-1.7137,latitudelongitude.org (GeoNames); checked: geodatos.net; worldatlas
+sefwi-wiawso,Sefwi Wiawso,Western North,6.2158,-2.4850,Wikipedia; checked: district page
+cape-coast,Cape Coast,Central,5.1054,-1.2466,geodatos.net (GeoNames); checked: NGA; time-ok.com
+koforidua,Koforidua,Eastern,6.0941,-0.2591,geodatos.net (GeoNames); checked: NGA; latlong.net
+ho,Ho,Volta,6.6008,0.4713,geodatos.net (GeoNames); checked: NGA; Wikipedia
+dambai,Dambai,Oti,8.0662,0.1795,geodatos.net (GeoNames); checked: Wikipedia
+sunyani,Sunyani,Bono,7.3399,-2.3268,geodatos.net (GeoNames); checked: Wikipedia
+techiman,Techiman,Bono East,7.5905,-1.9395,geodatos.net (GeoNames); checked: NGA; Wikipedia
+goaso,Goaso,Ahafo,6.8036,-2.5172,geodatos.net (GeoNames); checked: Wikipedia
+tamale,Tamale,Northern,9.4008,-0.8393,geodatos.net (GeoNames); checked: latitudelongitude.org; worldatlas
+damongo,Damongo,Savannah,9.0830,-1.8188,geodatos.net (GeoNames); checked: GeoNames page; NGA; Wikipedia
+nalerigu,Nalerigu,North East,10.5273,-0.3698,geodatos.net (GeoNames); checked: Wikipedia
+bolgatanga,Bolgatanga,Upper East,10.7856,-0.8514,NGA GEOnet Names Server; checked: Wikipedia; time-ok.com
+wa,Wa,Upper West,10.0607,-2.5019,geodatos.net (GeoNames); checked: Wikipedia; latlong.net
