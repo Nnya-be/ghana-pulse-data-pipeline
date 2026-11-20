@@ -128,14 +128,60 @@ The blended series is kept as a cross-check, not as the source.
 2. **Ingest with a range request.** A range returned only dates that have a rate.
 3. **Load as an upsert keyed on `date`, `base` and `quote`.** A range can return a record from before its start date, so the same record can arrive twice.
 4. **Bronze and silver keep exactly what arrived,** with no invented rows.
-5. **Gold fills dates that have no rate** by carrying the last known rate forward, with an `is_carried_forward` flag, so that every date in `dim_date` has a rate and carried values are marked.
+5. **Gold fills dates that have no rate** by carrying the last known rate forward, with an `is_carried_forward` flag, so that every date in `dim_date` has a rate and carried values are marked. The two-year load shows what gold has to fill: every weekend, plus the 28 weekdays listed under [FX: the two-year range](#fx-the-two-year-range).
 6. **Parse rates as `Decimal`, never as floats.** Frankfurter's Python documentation also recommends this for money.
 7. **Save the raw response bytes,** not parsed JSON written back out.
 8. **The loader must accept a day with no rate yet.** The latest record was one day behind when I fetched.
 
+## Load results
+
+Loaded with `ingest/load_weather.py` and `ingest/load_fx.py`, and checked with `ingest/verify.py`, for October 2024 to October 2026. Weather covers 3 of the 16 cities so far: Kumasi, Accra and Tamale. FX covers USD/GHS from the Bank of Ghana.
+
+### Idempotency
+
+The test: run the loader, run `verify.py`, run the loader again, then run `verify.py` again. The counts and the fingerprint must not change. The fingerprint is a hash of the data values, keyed on (city, date) for weather and (date, base, quote) for FX. It does not hash whole files, because `generationtime_ms` changes on every call.
+
+Second run of the loaders:
+
+```
+weather: 3 cities x 25 months = 75 partitions
+  skipped: 75  fetched: 0  failed: 0
+
+fx: 1 pairs x 25 months = 25 partitions
+  skipped: 25  fetched: 0  failed: 0
+```
+
+`verify.py` gave the same result before and after that run:
+
+| | Weather (3 cities) | FX (USD/GHS) |
+|---|---|---|
+| Partitions | 75 of 75 usable | 25 of 25 usable |
+| Rows | 2,283 of 2,283 expected | 516 rates |
+| Duplicates | 0 (city, day) rows | 13 records in two neighbouring partitions (see below) |
+| Null values | none | not applicable |
+| Fingerprint | `3b390a47bb867617` | `ad4fd3b2c7f02f8b` |
+
+A rerun made no requests, wrote no files, and left the data unchanged.
+
+### FX: the two-year range
+
+`python ingest/verify.py fx` over 2024-10 to 2026-10:
+
+- **516 rates.**
+- **13 records appear in two neighbouring partitions.** Each time, the first day of a month had no rate (a weekend, 1 January or 1 May), and that month's response began with the previous month's last rate. Example: the 2024-12 partition holds 2024-11-29. The 13 copies carry identical rates, and none is dated outside the overall range. Rule 3 (upsert on `date`, `base` and `quote`) keeps one copy of each.
+- **28 weekdays have no rate.** Bronze keeps these gaps as they are. Gold fills them under rule 5:
+
+| Year | Weekdays with no rate |
+|---|---|
+| 2024 | 06 Dec (Fri), 25 Dec (Wed), 26 Dec (Thu) |
+| 2025 | 01 Jan (Wed), 07 Jan (Tue), 06 Mar (Thu), 31 Mar (Mon), 01 Apr (Tue), 18 Apr (Fri), 21 Apr (Mon), 01 May (Thu), 06 Jun (Fri), 04 Jul (Fri), 22 Sep (Mon), 05 Dec (Fri), 25 Dec (Thu), 26 Dec (Fri) |
+| 2026 | 01 Jan (Thu), 09 Jan (Fri), 06 Mar (Fri), 20 Mar (Fri), 23 Mar (Mon), 03 Apr (Fri), 06 Apr (Mon), 01 May (Fri), 27 May (Wed), 03 Jul (Fri), 21 Sep (Mon) |
+
+Several of these dates look like Ghana public holidays, such as 25 December, 1 January, 6 March and 1 May. I have not checked the list against the official holiday calendar.
+
 ## Not yet checked
 
-- A full two-year range request: its record count and every gap longer than a weekend.
+- Whether each of the 28 weekdays with no FX rate is a Ghana public holiday.
 - The other currency pairs in the plan, with `providers=bog`.
 - The terms of Open-Meteo, Frankfurter and the Bank of Ghana.
 - A comparison of the hourly rainfall total with the daily `precipitation_sum` for 2026-11-01.
