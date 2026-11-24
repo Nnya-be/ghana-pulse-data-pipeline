@@ -1,0 +1,11 @@
+version: 2
+
+sources:
+  - name: raw
+    schema: raw
+    description: Flattened bronze data, loaded from CSV files by ingest/flatten.py.
+    tables:
+      - name: weather_daily
+        description: One row per city per day, with Open-Meteo's own column names.
+      - name: fx_rates
+        description: One row per date, base and quote. Bank of Ghana rates via Frankfurter.
