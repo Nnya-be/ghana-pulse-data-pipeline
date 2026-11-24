@@ -14,3 +14,8 @@ __pycache__/
 
 # Temporary files left by an interrupted atomic write
 *.tmp
+data/flat/
+# dbt
+target/
+logs/
+dbt_packages/
