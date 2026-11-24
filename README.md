@@ -35,3 +35,47 @@ The database runs in Docker (Postgres 18 with pgvector).
 3. Connect on `localhost:5433` with the credentials from `.env`.
 
 `.env` is in `.gitignore`, so your credentials are never committed.
+
+## Running dbt
+
+The dbt project lives in [dbt/ghana_pulse/](dbt/ghana_pulse/).
+
+1. Install dbt (pinned in `requirements-dev.txt`: `dbt-core==1.12.7`, `dbt-postgres==1.11.0`):
+
+   ```bash
+   pip install -r requirements-dev.txt
+   ```
+
+2. Add a `ghana_pulse` profile to `~/.dbt/profiles.yml`. It lives outside the repo, so it is never committed:
+
+   ```yaml
+   ghana_pulse:
+     target: dev
+     outputs:
+       dev:
+         type: postgres
+         host: localhost
+         port: 5433
+         dbname: ghana_pulse
+         user: your_user
+         pass: your_password
+         schema: dbt_dev
+         threads: 4
+   ```
+
+3. Run every dbt command from `dbt/ghana_pulse/`, not from the repo root or `dbt/`. Running from the wrong folder fails to find `dbt_project.yml` and leaves a stray `logs/` folder behind.
+
+   ```bash
+   cd dbt/ghana_pulse
+   dbt debug   # checks the profile and the database connection
+   dbt run     # builds the staging views in the dbt_dev schema
+   dbt test
+   ```
+
+Notes:
+
+- The sources are the `raw.weather_daily` and `raw.fx_rates` tables. They hold the CSVs that `ingest/flatten.py` writes to `data/flat/`, so load those first or `dbt run` fails on missing relations.
+- `flatten.py` keeps the source column names on purpose. The renaming happens in the staging models (`stg_weather`, `stg_fx`), so that is where to look for column mappings.
+- Staging models are built as views (set in `dbt_project.yml`).
+- `target/`, `logs/` and `dbt_packages/` are generated and gitignored. `dbt clean` removes `target/` and `dbt_packages/`.
+- TODO dbt-state: <!-- add the dbt-state note here -->
