@@ -15,21 +15,28 @@
  * 4) find the max of all the recent rental dates.
  * 5) order by the diff in rental dates.
  */
-with all_customer_rental_details as (
-	select c.customer_id, fc.category_id,
-	r.rental_date
-	from customer c 
-		join rental r 
-		on c.customer_id = r.customer_id 
-			join inventory i 
-			on r.inventory_id = i.inventory_id 
-				join film_category fc 
-				on i.film_id = fc.film_id 
+-- layer 1: one row per customer, with the categories they rented from and their latest rental
+with customer_activity as (
+    select r.customer_id,
+           count(distinct fc.category_id) as categories_rented,
+           max(r.rental_date)::date as last_rental_date
+    from rental r
+    join inventory i on i.inventory_id = r.inventory_id
+    join film_category fc on fc.film_id = i.film_id
+    group by r.customer_id
 ),
-customer_with_more_categories as (
-	select  category_id, customer_id,rental_date
-	from all_customer_rental_details
+-- layer 2: the same rows, plus the latest rental in the whole table (computed before any filter)
+with_table_latest as (
+    select customer_id, categories_rented, last_rental_date,
+           (select max(rental_date)::date from rental) as table_latest_date
+    from customer_activity
 )
-select * from customer_with_more_categories
-order by customer_id
-
+-- layer 3: keep the customers that match, with the gap in days
+select customer_id,
+       categories_rented,
+       last_rental_date,
+       table_latest_date - last_rental_date as days_inactive
+from with_table_latest
+where categories_rented >= 5
+  and table_latest_date - last_rental_date > 90
+order by days_inactive desc, customer_id;

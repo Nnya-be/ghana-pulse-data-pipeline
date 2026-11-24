@@ -11,27 +11,27 @@
  * 2)For each customer, sum their monthly payment and the total of all the customers spend.
  * 3)Rank their sum and group by the customer to get one row for the customer.
  */
-with customer_payment_details as (
-	select c.customer_id , p.amount ,
-	date_trunc('month', p.payment_date ) as payment_date
-	from customer c 
-		join payment p 
-		on c.customer_id  = p.customer_id 
+-- layer 1: one row per customer per month, with that month's total
+with monthly_spend as (
+    select p.customer_id,
+           date_trunc('month', p.payment_date)::date as payment_month,
+           sum(p.amount) as month_total
+    from payment p
+    group by p.customer_id, date_trunc('month', p.payment_date)::date
 ),
-customer_payment_sum as (
-	select distinct customer_id,
-	sum(amount) over(partition by customer_id order by payment_date) as montly_sum,
-	payment_date
-	from customer_payment_details 
-),
-customer_montly_total_ranks as (
-	select customer_id, payment_date,montly_sum,
-	rank() over(partition by customer_id order by montly_sum desc) as payment_rank,
-	sum(montly_sum) over(partition by customer_id) as customer_total_spend
-	from customer_payment_sum 
+-- layer 2: the same rows, plus each month's rank within its customer, and the customer's total
+ranked_months as (
+    select customer_id, payment_month, month_total,
+           row_number() over (partition by customer_id
+                              order by month_total desc, payment_month) as month_rank,
+           sum(month_total) over (partition by customer_id) as customer_total
+    from monthly_spend
 )
-select customer_id, montly_sum, customer_total_spend,
-round(100 * (montly_sum/customer_total_spend),2) as customer_spend_avg
-from customer_montly_total_ranks  
-where payment_rank = 1
-order by customer_id
+-- layer 3: keep only each customer's best month, with its share of their spend
+select customer_id,
+       payment_month,
+       month_total,
+       round(100.0 * month_total / customer_total, 2) as pct_of_customer_spend
+from ranked_months
+where month_rank = 1
+order by customer_id;
