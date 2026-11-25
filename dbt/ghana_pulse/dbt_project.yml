@@ -33,3 +33,5 @@ models:
   ghana_pulse:
     staging:
       +materialized: view
+    marts:
+      +materialized: table
